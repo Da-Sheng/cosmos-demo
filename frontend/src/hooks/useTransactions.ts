@@ -1,111 +1,118 @@
-import { useState, useCallback } from 'react';
-import { StargateClient } from '@cosmjs/stargate';
+import { useState, useEffect } from 'react';
 
-const RPC_ENDPOINT = 'http://localhost:26657';
-
-export type Transaction = {
+// 定义交易类型
+export interface Transaction {
   hash: string;
   height: number;
-  type: string;
-  status: string;
   timestamp: string;
-  sender: string;
-  recipient: string;
+  from: string;
+  to: string;
   amount: string;
   denom: string;
   fee: string;
+  status: 'success' | 'failed' | 'pending';
   memo?: string;
-  gasUsed: number;
-  gasWanted: number;
-};
+  type: string;
+}
 
+// 模拟交易数据
+const mockTransactions: Transaction[] = Array.from({ length: 30 }, (_, i) => ({
+  hash: `TX${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`,
+  height: 12345 - Math.floor(i / 2),
+  timestamp: new Date(Date.now() - i * 60000).toISOString(),
+  from: `cosmos1${Math.random().toString(36).substring(2, 10)}`,
+  to: `cosmos1${Math.random().toString(36).substring(2, 10)}`,
+  amount: `${Math.floor(Math.random() * 1000) + 1}.${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`,
+  denom: 'ATOM',
+  fee: `0.${Math.floor(Math.random() * 100).toString().padStart(3, '0')}`,
+  status: ['success', 'failed', 'pending'][Math.floor(Math.random() * 2.2)] as 'success' | 'failed' | 'pending',
+  memo: Math.random() > 0.7 ? `Transfer ${i}` : undefined,
+  type: ['transfer', 'delegate', 'undelegate', 'redelegate', 'reward'][Math.floor(Math.random() * 5)]
+}));
+
+// 交易钩子
 export const useTransactions = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [transaction, setTransaction] = useState<Transaction | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isTransactionLoading, setIsTransactionLoading] = useState<boolean>(false);
-
-  // 获取最近的交易
-  const fetchTransactions = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      // 使用模拟数据代替连接实际区块链节点
-      // const client = await StargateClient.connect(RPC_ENDPOINT);
-      // const latestHeight = await client.getHeight();
-      
-      // 模拟区块高度
-      const latestHeight = Math.floor(100000 + Math.random() * 1000);
-      
-      const mockTransactions: Transaction[] = [];
-      for (let i = 0; i < 10; i++) {
-        const height = latestHeight - Math.floor(Math.random() * 10);
-        if (height <= 0) continue;
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  // 过滤和分页状态
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [filter, setFilter] = useState<{
+    status?: 'success' | 'failed' | 'pending';
+    type?: string;
+    address?: string;
+  }>({});
+  
+  // 获取交易列表
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        // 模拟API延迟
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
-        mockTransactions.push({
-          hash: `0x${Math.random().toString(16).substring(2, 10)}${Math.random().toString(16).substring(2, 10)}`,
-          height,
-          type: Math.random() > 0.5 ? 'transfer' : 'delegate',
-          status: Math.random() > 0.1 ? 'success' : 'failed',
-          timestamp: new Date(Date.now() - i * 600000).toISOString(),
-          sender: `cosmos1sender${Math.random().toString(16).substring(2, 10)}`,
-          recipient: `cosmos1recipient${Math.random().toString(16).substring(2, 10)}`,
-          amount: (Math.random() * 1000).toFixed(0),
-          denom: 'udemo',
-          fee: '0.01',
-          memo: Math.random() > 0.5 ? '交易备注' : undefined,
-          gasUsed: Math.floor(Math.random() * 50000),
-          gasWanted: 200000,
-        });
+        // 过滤交易
+        let filteredTxs = [...mockTransactions];
+        
+        if (filter.status) {
+          filteredTxs = filteredTxs.filter(tx => tx.status === filter.status);
+        }
+        
+        if (filter.type) {
+          filteredTxs = filteredTxs.filter(tx => tx.type === filter.type);
+        }
+        
+        if (filter.address) {
+          filteredTxs = filteredTxs.filter(tx => 
+            tx.from.includes(filter.address!) || tx.to.includes(filter.address!)
+          );
+        }
+        
+        setTransactions(filteredTxs);
+        setLoading(false);
+      } catch (err) {
+        setError('获取交易数据失败');
+        setLoading(false);
       }
-      
-      setTransactions(mockTransactions);
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // 根据哈希获取特定交易
-  const fetchTransactionByHash = useCallback(async (hash: string) => {
-    setIsTransactionLoading(true);
+    };
+    
+    fetchTransactions();
+  }, [filter]);
+  
+  // 获取分页后的交易
+  const getPaginatedTransactions = () => {
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return transactions.slice(startIndex, endIndex);
+  };
+  
+  // 根据交易哈希获取详情
+  const getTransactionByHash = async (hash: string): Promise<Transaction | null> => {
+    setLoading(true);
     try {
-      // 在实际应用中，这里会连接到Cosmos节点并获取特定哈希的交易数据
-      // 目前使用模拟数据
-      const mockTransaction: Transaction = {
-        hash,
-        height: Math.floor(1000 + Math.random() * 1000),
-        type: Math.random() > 0.5 ? 'transfer' : 'delegate',
-        status: Math.random() > 0.1 ? 'success' : 'failed',
-        timestamp: new Date(Date.now() - Math.random() * 3600000).toISOString(),
-        sender: `cosmos1sender${Math.random().toString(16).substring(2, 10)}`,
-        recipient: `cosmos1recipient${Math.random().toString(16).substring(2, 10)}`,
-        amount: (Math.random() * 1000).toFixed(0),
-        denom: 'udemo',
-        fee: '0.01',
-        memo: Math.random() > 0.5 ? '交易备注' : undefined,
-        gasUsed: Math.floor(Math.random() * 50000),
-        gasWanted: 200000,
-      };
-      
-      setTransaction(mockTransaction);
-      
-      // 如果是搜索单个交易，也更新transactions列表
-      setTransactions([mockTransaction]);
-      
-    } catch (error) {
-      console.error(`Error fetching transaction with hash ${hash}:`, error);
-    } finally {
-      setIsTransactionLoading(false);
+      // 模拟API延迟
+      await new Promise(resolve => setTimeout(resolve, 800));
+      const tx = mockTransactions.find(t => t.hash === hash);
+      setLoading(false);
+      return tx || null;
+    } catch (err) {
+      setError('获取交易详情失败');
+      setLoading(false);
+      return null;
     }
-  }, []);
-
+  };
+  
   return {
-    transactions,
-    transaction,
-    isLoading,
-    isTransactionLoading,
-    fetchTransactions,
-    fetchTransactionByHash,
+    transactions: getPaginatedTransactions(),
+    totalCount: transactions.length,
+    loading,
+    error,
+    page,
+    pageSize,
+    setPage,
+    setPageSize,
+    setFilter,
+    getTransactionByHash
   };
 }; 

@@ -1,78 +1,67 @@
-import React from 'react';
-import { Layout, Menu, theme } from 'antd';
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
 import './App.css';
-import Dashboard from './pages/Dashboard';
-import Wallet from './pages/Wallet';
-import Transactions from './pages/Transactions';
-import Blocks from './pages/Blocks';
-
-const { Header, Content, Footer, Sider } = Layout;
+import { Dashboard, Blocks, Transactions, Wallet } from './pages';
 
 const App: React.FC = () => {
-  const {
-    token: { colorBgContainer, borderRadiusLG },
-  } = theme.useToken();
-  
-  const location = useLocation();
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return <Dashboard />;
+      case 'wallet':
+        return <Wallet />;
+      case 'transactions':
+        return <Transactions />;
+      case 'blocks':
+        return <Blocks />;
+      default:
+        return <div>页面未找到</div>;
+    }
+  };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
-      <Sider
-        breakpoint="lg"
-        collapsedWidth="0"
-      >
-        <div className="logo" style={{ height: '32px', margin: '16px', color: '#fff', textAlign: 'center', fontSize: '18px', fontWeight: 'bold' }}>
-          Cosmos Demo
-        </div>
-        <Menu
-          theme="dark"
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          items={[
-            {
-              key: '/',
-              label: <Link to="/">Dashboard</Link>,
-            },
-            {
-              key: '/wallet',
-              label: <Link to="/wallet">Wallet</Link>,
-            },
-            {
-              key: '/transactions',
-              label: <Link to="/transactions">Transactions</Link>,
-            },
-            {
-              key: '/blocks',
-              label: <Link to="/blocks">Blocks</Link>,
-            },
-          ]}
-        />
-      </Sider>
-      <Layout>
-        <Header style={{ padding: 0, background: colorBgContainer }} />
-        <Content style={{ margin: '24px 16px 0' }}>
-          <div
-            style={{
-              padding: 24,
-              minHeight: 360,
-              background: colorBgContainer,
-              borderRadius: borderRadiusLG,
-            }}
-          >
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/wallet" element={<Wallet />} />
-              <Route path="/transactions" element={<Transactions />} />
-              <Route path="/blocks" element={<Blocks />} />
-            </Routes>
-          </div>
-        </Content>
-        <Footer style={{ textAlign: 'center' }}>
-          Cosmos Demo ©{new Date().getFullYear()} Created by Da-Sheng
-        </Footer>
-      </Layout>
-    </Layout>
+    <div className="App">
+      <header className="app-header">
+        <h1>🚀 Cosmos Demo</h1>
+        <p>区块链应用演示平台</p>
+      </header>
+      
+      <nav className="app-nav">
+        <button 
+          className={activeTab === 'dashboard' ? 'nav-button active' : 'nav-button'}
+          onClick={() => setActiveTab('dashboard')}
+        >
+          控制台
+        </button>
+        <button 
+          className={activeTab === 'wallet' ? 'nav-button active' : 'nav-button'}
+          onClick={() => setActiveTab('wallet')}
+        >
+          钱包
+        </button>
+        <button 
+          className={activeTab === 'transactions' ? 'nav-button active' : 'nav-button'}
+          onClick={() => setActiveTab('transactions')}
+        >
+          交易
+        </button>
+        <button 
+          className={activeTab === 'blocks' ? 'nav-button active' : 'nav-button'}
+          onClick={() => setActiveTab('blocks')}
+        >
+          区块
+        </button>
+      </nav>
+
+      <main className="app-main">
+        {renderContent()}
+      </main>
+
+      <footer className="app-footer">
+        <p>Cosmos Demo © 2024 Created by Da-Sheng</p>
+      </footer>
+    </div>
   );
 };
 

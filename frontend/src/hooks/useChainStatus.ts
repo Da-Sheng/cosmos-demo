@@ -1,85 +1,62 @@
-import { useState, useCallback, useEffect } from 'react';
-import { StargateClient } from '@cosmjs/stargate';
+import { useState, useEffect } from 'react';
 
-const RPC_ENDPOINT = 'http://localhost:26657';
-
-export type LatestBlock = {
-  height: number;
-  hash: string;
-  timestamp: string;
-  txCount: number;
-  proposer: string;
-};
-
-export type ChainStatus = {
+// 定义链状态类型
+export interface ChainStatus {
   latestHeight: number;
-  blockTime: number; // 毫秒
-  txCount: number;
-  validatorCount: number;
+  latestBlocks: Array<{
+    height: number;
+    hash: string;
+    timestamp: string;
+    proposer: string;
+    txCount: number;
+  }>;
+  blockTime: number; // 平均出块时间（秒）
+  activeValidators: number;
+  totalValidators: number;
+  txCount: number; // 总交易数
+  bondedTokens: string;
+  inflation: string;
+}
+
+// 模拟链状态数据
+const mockChainStatus: ChainStatus = {
+  latestHeight: 12345,
+  latestBlocks: Array.from({ length: 5 }, (_, i) => ({
+    height: 12345 - i,
+    hash: `B${Math.random().toString(36).substring(2, 15)}`,
+    timestamp: new Date(Date.now() - i * 15000).toISOString(),
+    proposer: `validator${(i % 5) + 1}`,
+    txCount: Math.floor(Math.random() * 20)
+  })),
+  blockTime: 5.2, // 秒
+  activeValidators: 42,
+  totalValidators: 50,
+  txCount: 98765,
+  bondedTokens: '1,256,789,456 ATOM',
+  inflation: '7.8%'
 };
 
+// 链状态钩子
 export const useChainStatus = () => {
   const [chainStatus, setChainStatus] = useState<ChainStatus | null>(null);
-  const [latestBlocks, setLatestBlocks] = useState<LatestBlock[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchChainStatus = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      // 使用模拟数据，不实际连接到区块链节点
-      // const client = await StargateClient.connect(RPC_ENDPOINT);
-      // const latestHeight = await client.getHeight();
-      
-      // 模拟的区块高度
-      const latestHeight = Math.floor(100000 + Math.random() * 1000);
-      
-      // 模拟最近的区块数据
-      const blocks: LatestBlock[] = [];
-      for (let i = 0; i < 5; i++) {
-        const height = latestHeight - i;
-        if (height <= 0) break;
-        
-        blocks.push({
-          height,
-          hash: `0x${Math.random().toString(16).substring(2, 10)}${Math.random().toString(16).substring(2, 10)}`,
-          timestamp: new Date(Date.now() - i * 600000).toISOString(),
-          txCount: Math.floor(Math.random() * 5),
-          proposer: `validator${Math.floor(Math.random() * 10) + 1}`
-        });
+  useEffect(() => {
+    const fetchChainStatus = async () => {
+      try {
+        // 模拟API调用延迟
+        await new Promise(resolve => setTimeout(resolve, 1200));
+        setChainStatus(mockChainStatus);
+        setLoading(false);
+      } catch (err) {
+        setError('获取链状态失败');
+        setLoading(false);
       }
-      
-      // 设置链状态
-      setChainStatus({
-        latestHeight: latestHeight,
-        blockTime: 6.0, // 6秒
-        txCount: Math.floor(10000 + Math.random() * 5000),
-        validatorCount: 100,
-      });
-      
-      setLatestBlocks(blocks);
-    } catch (error) {
-      console.error('Error fetching chain status:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    };
+
+    fetchChainStatus();
   }, []);
 
-  // 初始化时获取一次链状态
-  useEffect(() => {
-    fetchChainStatus();
-    
-    // 每60秒自动刷新一次
-    const interval = setInterval(() => {
-      fetchChainStatus();
-    }, 60000);
-    
-    return () => clearInterval(interval);
-  }, [fetchChainStatus]);
-
-  return {
-    chainStatus,
-    latestBlocks,
-    isLoading,
-    fetchChainStatus,
-  };
+  return { chainStatus, loading, error };
 }; 

@@ -1,115 +1,181 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { Table, Typography, Tag, Card, Input, Space, Button, Tooltip } from 'antd';
 import { SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined } from '@ant-design/icons';
-import { useTransactions } from '../hooks/useTransactions';
+import { useTransactions, Transaction } from '../hooks/useTransactions';
 
 const { Title } = Typography;
 
 const Transactions: React.FC = () => {
-  const { transactions, isLoading, fetchTransactions, fetchTransactionByHash } = useTransactions();
-  const [searchValue, setSearchValue] = useState<string>('');
+  const { 
+    transactions, 
+    totalCount,
+    loading, 
+    error,
+    page,
+    pageSize,
+    setPage,
+    setPageSize,
+    setFilter
+  } = useTransactions();
+  
+  const [searchText, setSearchText] = useState('');
 
-  useEffect(() => {
-    fetchTransactions();
-  }, [fetchTransactions]);
-
+  // 处理搜索
   const handleSearch = () => {
-    if (searchValue.trim()) {
-      fetchTransactionByHash(searchValue.trim());
+    if (searchText.trim()) {
+      setFilter({ address: searchText.trim() });
     } else {
-      fetchTransactions();
+      setFilter({});
     }
   };
 
+  // 处理状态筛选
+  const handleStatusFilter = (status?: 'success' | 'failed' | 'pending') => {
+    setFilter({ status });
+  };
+
+  // 表格列配置
   const columns = [
     {
-      title: 'Hash',
+      title: '交易哈希',
       dataIndex: 'hash',
       key: 'hash',
+      ellipsis: true,
       render: (hash: string) => (
         <Tooltip title={hash}>
-          <span>{hash.substring(0, 8)}...{hash.substring(hash.length - 8)}</span>
+          <span className="transaction-hash">{hash.substring(0, 8)}...{hash.substring(hash.length - 8)}</span>
         </Tooltip>
       ),
     },
     {
-      title: 'Type',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => <Tag color="blue">{type}</Tag>,
+      title: '区块',
+      dataIndex: 'height',
+      key: 'height',
+      render: (height: number) => (
+        <Tag color="purple">{height}</Tag>
+      ),
     },
     {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
-        if (status === 'success') {
-          return <Tag icon={<CheckCircleOutlined />} color="success">Success</Tag>;
-        } else if (status === 'pending') {
-          return <Tag icon={<SyncOutlined spin />} color="processing">Pending</Tag>;
-        } else {
-          return <Tag icon={<CloseCircleOutlined />} color="error">Failed</Tag>;
-        }
+      title: '类型',
+      dataIndex: 'type',
+      key: 'type',
+      render: (type: string) => {
+        let color = 'blue';
+        if (type === 'delegate') color = 'cyan';
+        if (type === 'undelegate') color = 'orange';
+        if (type === 'reward') color = 'gold';
+        
+        return <Tag color={color}>{type}</Tag>;
       },
     },
     {
-      title: 'Height',
-      dataIndex: 'height',
-      key: 'height',
+      title: '金额',
+      key: 'amount',
+      render: (_: unknown, record: Transaction) => (
+        <span>{record.amount} {record.denom}</span>
+      ),
     },
     {
-      title: 'Time',
+      title: '状态',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => {
+        let icon = null;
+        let color = '';
+        
+        if (status === 'success') {
+          icon = <CheckCircleOutlined />;
+          color = 'green';
+        } else if (status === 'failed') {
+          icon = <CloseCircleOutlined />;
+          color = 'red';
+        } else {
+          icon = <SyncOutlined spin />;
+          color = 'orange';
+        }
+        
+        return (
+          <Tag color={color} icon={icon}>
+            {status.charAt(0).toUpperCase() + status.slice(1)}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: '时间',
       dataIndex: 'timestamp',
       key: 'timestamp',
       render: (timestamp: string) => new Date(timestamp).toLocaleString(),
     },
-    {
-      title: 'From',
-      dataIndex: 'sender',
-      key: 'sender',
-      render: (sender: string) => (
-        <Tooltip title={sender}>
-          <span>{sender.substring(0, 8)}...{sender.substring(sender.length - 8)}</span>
-        </Tooltip>
-      ),
-    },
-    {
-      title: 'To',
-      dataIndex: 'recipient',
-      key: 'recipient',
-      render: (recipient: string) => (
-        <Tooltip title={recipient}>
-          <span>{recipient.substring(0, 8)}...{recipient.substring(recipient.length - 8)}</span>
-        </Tooltip>
-      ),
-    },
-    {
-      title: 'Amount',
-      dataIndex: 'amount',
-      key: 'amount',
-      render: (amount: string, record: any) => `${amount} ${record.denom}`,
-    },
   ];
+
+  if (loading && transactions.length === 0) {
+    return (
+      <div className="loading-container">
+        <Title level={3}>加载交易数据...</Title>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="error-container">
+        <Title level={3}>获取交易数据失败</Title>
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <Title level={2}>Transactions</Title>
+      <div className="page-header">
+        <Title className="page-title">交易列表</Title>
+        <p className="page-description">查看区块链上的所有交易记录</p>
+      </div>
       
-      <Card style={{ marginBottom: '20px' }}>
-        <Space>
+      <Card style={{ marginBottom: 16 }}>
+        <Space style={{ marginBottom: 16 }}>
           <Input
-            placeholder="Search by transaction hash"
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            style={{ width: '300px' }}
+            placeholder="搜索地址"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
             onPressEnter={handleSearch}
+            style={{ width: 300 }}
+            prefix={<SearchOutlined />}
           />
+          <Button type="primary" onClick={handleSearch}>
+            搜索
+          </Button>
+          <Button onClick={() => setFilter({})}>
+            重置
+          </Button>
+        </Space>
+        
+        <Space>
+          <span>状态筛选:</span>
           <Button 
-            type="primary" 
-            icon={<SearchOutlined />} 
-            onClick={handleSearch}
+            type="link" 
+            onClick={() => handleStatusFilter('success')}
           >
-            Search
+            <Tag color="green" icon={<CheckCircleOutlined />}>成功</Tag>
+          </Button>
+          <Button 
+            type="link" 
+            onClick={() => handleStatusFilter('failed')}
+          >
+            <Tag color="red" icon={<CloseCircleOutlined />}>失败</Tag>
+          </Button>
+          <Button 
+            type="link" 
+            onClick={() => handleStatusFilter('pending')}
+          >
+            <Tag color="orange" icon={<SyncOutlined spin />}>处理中</Tag>
+          </Button>
+          <Button 
+            type="link" 
+            onClick={() => handleStatusFilter()}
+          >
+            全部
           </Button>
         </Space>
       </Card>
@@ -117,12 +183,16 @@ const Transactions: React.FC = () => {
       <Table 
         columns={columns} 
         dataSource={transactions} 
-        rowKey="hash" 
-        loading={isLoading}
-        pagination={{ 
-          pageSize: 10,
+        rowKey="hash"
+        loading={loading}
+        pagination={{
+          current: page,
+          pageSize: pageSize,
+          total: totalCount,
+          onChange: (newPage) => setPage(newPage),
+          onShowSizeChange: (_, newSize) => setPageSize(newSize),
           showSizeChanger: true,
-          showTotal: (total) => `Total ${total} transactions`
+          showTotal: (total) => `共 ${total} 笔交易`
         }}
       />
     </div>
