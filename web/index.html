@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>区块链钱包浏览器</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <header>
+        <h1>🔗 区块链钱包浏览器</h1>
+        <div class="chain-status">
+            <span>当前高度: <strong id="chain-height">0</strong></span>
+            <span>待处理交易: <strong id="pending-tx">0</strong></span>
+            <span>挖矿状态: <strong id="mining-status">停止</strong></span>
+        </div>
+    </header>
+
+    <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="blockchain">区块链</button>
+        <button class="tab-btn" data-tab="wallet">钱包管理</button>
+        <button class="tab-btn" data-tab="mining">挖矿</button>
+        <button class="tab-btn" data-tab="transactions">交易历史</button>
+    </nav>
+
+    <main>
+        <!-- 区块链标签页 -->
+        <div id="blockchain-tab" class="tab-content active">
+            <!-- 控制面板 - 提升到顶部 -->
+            <section class="control-panel-top">
+                <h2>🔧 控制面板</h2>
+                <div class="control-sections">
+                    <div class="panel-section">
+                        <h3>初始化区块链</h3>
+                        <div class="input-group">
+                            <input type="text" id="genesis-data" placeholder="创世区块数据" value="区块链启动">
+                            <button id="create-genesis" class="btn-primary">创建创世区块</button>
+                        </div>
+                    </div>
+                    <div class="panel-section">
+                        <h3>区块生成控制</h3>
+                        <div class="button-group">
+                            <button id="start-mining" class="btn-success">开始挖矿</button>
+                            <button id="stop-mining" class="btn-danger">停止挖矿</button>
+                        </div>
+                    </div>
+                    <div class="panel-section">
+                        <h3>创建交易</h3>
+                        <div class="transaction-form">
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label>接收方地址:</label>
+                                    <input type="text" id="tx-to-address" placeholder="接收方钱包地址">
+                                </div>
+                                <div class="input-group">
+                                    <label>转账金额:</label>
+                                    <input type="number" id="tx-amount" placeholder="转账金额" min="1" step="1">
+                                    <small>手续费: 1 币</small>
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="input-group">
+                                    <label>备注信息:</label>
+                                    <input type="text" id="tx-memo" placeholder="交易备注（可选）">
+                                </div>
+                            </div>
+                            <div class="form-info">
+                                <small>📝 发送方：当前矿工钱包（自动获取）</small>
+                            </div>
+                            <button id="add-transaction" class="btn-primary">创建交易</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 主要内容区域 -->
+            <div class="main-content-area">
+                <div class="left-panel">
+                    <section class="block-explorer">
+                        <h2>🔍 区块浏览器</h2>
+                        <div class="search-section">
+                            <div class="input-group">
+                                <input type="number" id="block-height" placeholder="区块高度">
+                                <button id="search-block" class="btn-primary">查询区块</button>
+                            </div>
+                        </div>
+                        <div id="block-details" class="block-details hidden">
+                            <h3>区块详情</h3>
+                            <table>
+                                <tr><td>高度:</td><td id="block-detail-height"></td></tr>
+                                <tr><td>时间戳:</td><td id="block-detail-timestamp"></td></tr>
+                                <tr><td>数据:</td><td id="block-detail-data"></td></tr>
+                                <tr><td>前区块哈希:</td><td id="block-detail-prev-hash"></td></tr>
+                                <tr><td>区块哈希:</td><td id="block-detail-hash"></td></tr>
+                                <tr><td>验证者:</td><td id="block-detail-validator"></td></tr>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="right-panel">
+                    <section class="block-list">
+                        <h2>📜 区块列表</h2>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>高度</th>
+                                        <th>时间</th>
+                                        <th>数据</th>
+                                        <th>哈希</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="blocks-table-body"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <!-- 钱包管理标签页 -->
+        <div id="wallet-tab" class="tab-content">
+            <div class="wallet-container">
+                <div class="wallet-left">
+                    <section class="wallet-control">
+                        <h2>💰 钱包管理</h2>
+                        <div class="wallet-actions">
+                            <button id="create-wallet" class="btn-primary">创建新钱包</button>
+                            <button id="refresh-wallets" class="btn-secondary">刷新钱包列表</button>
+                        </div>
+                    </section>
+
+                    <section class="transfer-section">
+                        <h2>💸 转账功能</h2>
+                        <div class="transfer-form">
+                            <div class="input-group">
+                                <label>发送方地址:</label>
+                                <select id="from-address" class="address-select">
+                                    <option value="">选择发送方钱包</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>接收方地址:</label>
+                                <input type="text" id="to-address" placeholder="接收方钱包地址">
+                            </div>
+                            <div class="input-group">
+                                <label>转账金额:</label>
+                                <input type="number" id="transfer-amount" placeholder="转账金额" min="1">
+                                <small>手续费: 1 币</small>
+                            </div>
+                            <button id="transfer-submit" class="btn-success">确认转账</button>
+                        </div>
+                    </section>
+                </div>
+
+                <div class="wallet-right">
+                    <section class="wallet-list">
+                        <h2>👛 钱包列表</h2>
+                        <div id="wallets-container" class="wallets-grid">
+                            <!-- 钱包列表将在这里动态生成 -->
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <!-- 挖矿标签页 -->
+        <div id="mining-tab" class="tab-content">
+            <div class="mining-container">
+                <section class="miner-info">
+                    <h2>⛏️ 矿工信息</h2>
+                    <div id="miner-details" class="miner-card">
+                        <div class="miner-address">
+                            <strong>矿工地址:</strong> 
+                            <span id="miner-address">未获取</span>
+                        </div>
+                        <div class="miner-balance">
+                            <strong>钱包余额:</strong> 
+                            <span id="miner-balance">0</span> 币
+                        </div>
+                        <div class="miner-stats">
+                            <div class="stat-item">
+                                <span>已挖区块:</span>
+                                <span id="blocks-mined">0</span>
+                            </div>
+                            <div class="stat-item">
+                                <span>总奖励:</span>
+                                <span id="total-rewards">0</span> 币
+                            </div>
+                            <div class="stat-item">
+                                <span>单区块奖励:</span>
+                                <span id="block-reward">100</span> 币
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="mining-control">
+                    <h2>⚙️ 挖矿控制</h2>
+                    <div class="mining-buttons">
+                        <button id="start-mining-2" class="btn-success">开始挖矿</button>
+                        <button id="stop-mining-2" class="btn-danger">停止挖矿</button>
+                    </div>
+                    <div class="mining-info">
+                        <p>挖矿说明：</p>
+                        <ul>
+                            <li>每10秒自动生成一个新区块</li>
+                            <li>每个区块可获得100币奖励</li>
+                            <li>奖励自动发放到矿工钱包</li>
+                        </ul>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- 交易历史标签页 -->
+        <div id="transactions-tab" class="tab-content">
+            <section class="transaction-history">
+                <h2>📋 交易历史</h2>
+                <div class="transaction-filters">
+                    <button id="refresh-transactions" class="btn-secondary">刷新交易</button>
+                    <select id="transaction-type-filter">
+                        <option value="all">所有交易</option>
+                        <option value="transfer">用户转账</option>
+                        <option value="mining">挖矿奖励</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table id="transactions-table">
+                        <thead>
+                            <tr>
+                                <th>交易ID</th>
+                                <th>类型</th>
+                                <th>发送方</th>
+                                <th>接收方</th>
+                                <th>金额</th>
+                                <th>手续费</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactions-table-body">
+                            <!-- 交易记录将在这里动态生成 -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <p>🌟 这是一个功能完整的区块链钱包演示程序 | 支持钱包管理、转账、挖矿等功能</p>
+    </footer>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

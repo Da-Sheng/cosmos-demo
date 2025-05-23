@@ -1,0 +1,407 @@
+package blockchain
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"sync"
+	"time"
+)
+
+// Block 表示区块链中的一个区块
+type Block struct {
+	Height        int       `json:"height"`
+	Timestamp     time.Time `json:"timestamp"`
+	Data          string    `json:"data"`
+	PrevHash      string    `json:"prev_hash"`
+	Hash          string    `json:"hash"`
+	Validator     string    `json:"validator"`
+	Signature     Signature `json:"signature"`
+}
+
+// Signature 表示区块的数字签名
+type Signature struct {
+	R string `json:"r"`
+	S string `json:"s"`
+}
+
+// Node 表示区块链节点
+type Node struct {
+	chain               []*Block         // 区块链
+	pendingTransactions []string         // 待处理的交易
+	walletManager       *WalletManager   // 钱包管理器
+	transactions        []*Transaction   // 交易历史
+	minerAddress        string           // 矿工地址
+	miningReward        int64            // 挖矿奖励
+	validator           string           // 验证者身份
+	mining              bool             // 是否正在生成区块
+	stopMining          chan struct{}    // 停止挖矿的信号通道
+	blockTime           int              // 区块生成间隔（秒）
+	mu                  sync.RWMutex     // 读写锁，保护并发访问
+}
+
+// NewNode 创建一个新的区块链节点
+func NewNode(blockTime int) *Node {
+	if blockTime <= 0 {
+		blockTime = 10 // 默认每10秒生成一个区块
+	}
+	
+	walletManager := NewWalletManager()
+	// 创建矿工钱包
+	minerWallet := walletManager.CreateWallet()
+	
+	return &Node{
+		chain:               make([]*Block, 0),
+		pendingTransactions: make([]string, 0),
+		walletManager:       walletManager,
+		transactions:        make([]*Transaction, 0),
+		minerAddress:        minerWallet.Address,
+		miningReward:        100, // 挖矿奖励100币
+		validator:           generateValidatorID(),
+		blockTime:           blockTime,
+		stopMining:          make(chan struct{}),
+	}
+}
+
+// generateValidatorID 生成一个随机的验证者ID
+func generateValidatorID() string {
+	timestamp := time.Now().UnixNano()
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%d", timestamp)))
+	return hex.EncodeToString(hash[:])[:8]
+}
+
+// CreateGenesisBlock 创建创世区块
+func (n *Node) CreateGenesisBlock(data string) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	
+	// 检查是否已有区块
+	if len(n.chain) > 0 {
+		return fmt.Errorf("创世区块已存在")
+	}
+	
+	// 创建创世区块
+	block := &Block{
+		Height:    1,
+		Timestamp: time.Now(),
+		Data:      data,
+		PrevHash:  "0000000000000000000000000000000000000000000000000000000000000000",
+		Validator: n.validator,
+	}
+	
+	// 计算区块哈希并签名
+	block.Hash = n.calculateBlockHash(block)
+	block.Signature = n.signBlock(block)
+	
+	// 添加到链
+	n.chain = append(n.chain, block)
+	
+	return nil
+}
+
+// AddTransaction 添加一个交易到等待队列
+func (n *Node) AddTransaction(data string) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	
+	n.pendingTransactions = append(n.pendingTransactions, data)
+}
+
+// StartMining 开始生成区块
+func (n *Node) StartMining() {
+	n.mu.Lock()
+	if n.mining {
+		n.mu.Unlock()
+		return
+	}
+	
+	// 确保我们有一个干净的停止通道
+	select {
+	case <-n.stopMining:
+		// 通道已关闭，创建新通道
+		n.stopMining = make(chan struct{})
+	default:
+		// 通道未关闭，不做任何事
+	}
+	
+	n.mining = true
+	n.mu.Unlock()
+	
+	go n.mineBlocks()
+}
+
+// StopMining 停止生成区块
+func (n *Node) StopMining() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	
+	if !n.mining {
+		return
+	}
+	
+	// 检查通道是否已关闭
+	select {
+	case <-n.stopMining:
+		// 通道已关闭，创建新通道
+		n.stopMining = make(chan struct{})
+	default:
+		// 通道未关闭，关闭它
+		close(n.stopMining)
+	}
+	
+	n.mining = false
+}
+
+// mineBlocks 区块生成的主循环
+func (n *Node) mineBlocks() {
+	ticker := time.NewTicker(time.Duration(n.blockTime) * time.Second)
+	defer ticker.Stop()
+	
+	for {
+		select {
+		case <-n.stopMining:
+			return
+		case <-ticker.C:
+			n.generateNewBlock()
+		}
+	}
+}
+
+// generateNewBlock 生成一个新区块
+func (n *Node) generateNewBlock() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	
+	// 检查是否有创世区块
+	if len(n.chain) == 0 {
+		return
+	}
+	
+	// 获取待处理交易
+	var blockData string
+	if len(n.pendingTransactions) > 0 {
+		// 取第一个交易作为区块数据
+		blockData = n.pendingTransactions[0]
+		// 移除已处理的交易
+		n.pendingTransactions = n.pendingTransactions[1:]
+	} else {
+		blockData = "空块"
+	}
+	
+	// 获取最后一个区块
+	prevBlock := n.chain[len(n.chain)-1]
+	
+	// 创建新区块
+	newBlock := &Block{
+		Height:    prevBlock.Height + 1,
+		Timestamp: time.Now(),
+		Data:      blockData,
+		PrevHash:  prevBlock.Hash,
+		Validator: n.validator,
+	}
+	
+	// 计算哈希和签名
+	newBlock.Hash = n.calculateBlockHash(newBlock)
+	newBlock.Signature = n.signBlock(newBlock)
+	
+	// 添加到链
+	n.chain = append(n.chain, newBlock)
+	
+	// 给矿工发放挖矿奖励
+	if n.walletManager != nil && n.minerAddress != "" {
+		rewardTx := &Transaction{
+			ID:        "mining-reward-" + fmt.Sprintf("%d", newBlock.Height),
+			From:      "system",
+			To:        n.minerAddress,
+			Amount:    n.miningReward,
+			Fee:       0,
+			Timestamp: time.Now().Unix(),
+			Signature: "system-reward",
+		}
+		
+		// 处理挖矿奖励交易
+		n.walletManager.ProcessTransaction(rewardTx)
+		n.transactions = append(n.transactions, rewardTx)
+	}
+}
+
+// calculateBlockHash 计算区块的哈希值
+func (n *Node) calculateBlockHash(block *Block) string {
+	blockData := fmt.Sprintf(
+		"%d%s%s%s%s",
+		block.Height,
+		block.Timestamp.String(),
+		block.Data,
+		block.PrevHash,
+		block.Validator,
+	)
+	
+	hash := sha256.Sum256([]byte(blockData))
+	return hex.EncodeToString(hash[:])
+}
+
+// signBlock 为区块创建签名
+func (n *Node) signBlock(block *Block) Signature {
+	// 简化的模拟签名过程
+	message := block.Hash + block.Validator
+	rHash := sha256.Sum256([]byte(message + "r"))
+	sHash := sha256.Sum256([]byte(message + "s"))
+	
+	return Signature{
+		R: hex.EncodeToString(rHash[:])[:16],
+		S: hex.EncodeToString(sHash[:])[:16],
+	}
+}
+
+// ExportBlockchain 将区块链状态导出到文件
+func (n *Node) ExportBlockchain(filename string) error {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	
+	data, err := json.MarshalIndent(n.chain, "", "  ")
+	if err != nil {
+		return err
+	}
+	
+	return ioutil.WriteFile(filename, data, 0644)
+}
+
+// ImportBlockchain 从文件导入区块链状态
+func (n *Node) ImportBlockchain(filename string) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	
+	var chain []*Block
+	if err := json.Unmarshal(data, &chain); err != nil {
+		return err
+	}
+	
+	n.chain = chain
+	return nil
+}
+
+// GetHeight 获取区块链当前高度
+func (n *Node) GetHeight() int {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	
+	if len(n.chain) == 0 {
+		return 0
+	}
+	
+	return n.chain[len(n.chain)-1].Height
+}
+
+// GetBlockByHeight 根据高度获取区块
+func (n *Node) GetBlockByHeight(height int) *Block {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	
+	for _, block := range n.chain {
+		if block.Height == height {
+			return block
+		}
+	}
+	
+	return nil
+}
+
+// GetAllBlocks 获取所有区块
+func (n *Node) GetAllBlocks() []*Block {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	
+	// 创建一个副本以避免并发修改
+	result := make([]*Block, len(n.chain))
+	copy(result, n.chain)
+	
+	return result
+}
+
+// 钱包管理方法
+func (n *Node) CreateWallet() *Wallet {
+	return n.walletManager.CreateWallet()
+}
+
+func (n *Node) GetWallet(address string) *Wallet {
+	return n.walletManager.GetWallet(address)
+}
+
+func (n *Node) GetAllWallets() []*Wallet {
+	return n.walletManager.GetAllWallets()
+}
+
+func (n *Node) GetBalance(address string) int64 {
+	return n.walletManager.GetBalance(address)
+}
+
+// 转账方法
+func (n *Node) Transfer(from, to string, amount int64) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	fee := int64(1) // 固定手续费1币
+	tx := n.walletManager.CreateTransaction(from, to, amount, fee)
+	
+	// 验证并处理交易
+	if err := n.walletManager.ProcessTransaction(tx); err != nil {
+		return err
+	}
+
+	// 添加到交易历史
+	n.transactions = append(n.transactions, tx)
+	
+	// 将交易信息添加到待处理交易池，这样挖矿时就能包含在区块中
+	transactionData := fmt.Sprintf("转账: %s -> %s, 金额: %d, 手续费: %d, ID: %s", 
+		from, to, amount, fee, tx.ID)
+	n.pendingTransactions = append(n.pendingTransactions, transactionData)
+	
+	return nil
+}
+
+// 获取交易历史
+func (n *Node) GetTransactions() []*Transaction {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	
+	result := make([]*Transaction, len(n.transactions))
+	copy(result, n.transactions)
+	return result
+}
+
+// 获取矿工地址
+func (n *Node) GetMinerAddress() string {
+	return n.minerAddress
+}
+
+// 获取挖矿统计
+func (n *Node) GetMiningStats() map[string]interface{} {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	
+	// 计算挖矿收益
+	totalReward := int64(0)
+	blocksMined := 0
+	
+	for _, block := range n.chain {
+		if block.Validator == n.validator && block.Height > 1 { // 排除创世区块
+			totalReward += n.miningReward
+			blocksMined++
+		}
+	}
+	
+	return map[string]interface{}{
+		"miner_address":  n.minerAddress,
+		"blocks_mined":   blocksMined,
+		"total_reward":   totalReward,
+		"mining_reward":  n.miningReward,
+		"is_mining":      n.mining,
+	}
+}

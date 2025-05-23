@@ -33,9 +33,9 @@
     "test-frontend": "cd frontend && npm test -- --watchAll=false",
     
     "_chain:build": "(cd chain && mkdir -p build && /opt/homebrew/bin/go build -o build/demochaid ./cmd/demochaid) || (echo '❌ 区块链构建失败，可能是网络问题。请稍后重试或使用 npm run dev-frontend-only 只启动前端' && exit 1)",
-    "_chain:init": "cd chain && ./build/demochaid init mynode --chain-id demo-chain && ./build/demochaid keys add validator --keyring-backend test && ./build/demochaid keys add user1 --keyring-backend test && ./build/demochaid add-genesis-account validator 1000000000stake --keyring-backend test && ./build/demochaid add-genesis-account user1 1000000000stake --keyring-backend test && ./build/demochaid gentx validator 100000000stake --chain-id demo-chain --keyring-backend test && ./build/demochaid collect-gentxs",
+    "_chain:init": "cd chain && ./build/demochaid init mynode && echo '✅ 区块链初始化完成'",
     "_chain:setup": "npm run _chain:build && npm run _chain:init",
-    "_chain:prepare": "test -f chain/build/demochaid || npm run _chain:build && test -d ~/.demochaid || npm run _chain:init",
+    "_chain:prepare": "test -f chain/build/demochaid || npm run _chain:build && echo '✅ 区块链准备完成'",
     
     "_frontend:setup": "cd frontend && npm install",
     "_frontend:build": "cd frontend && npm run build",

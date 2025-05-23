@@ -1,100 +1,53 @@
 package main
 
 import (
+	"fmt"
 	"os"
 
-	"github.com/cosmos/cosmos-sdk/server"
-	svrcmd "github.com/cosmos/cosmos-sdk/server/cmd"
 	"github.com/spf13/cobra"
-
-	"github.com/da-sheng/cosmos-demo/chain/app"
 )
 
 func main() {
-	rootCmd := NewRootCmd()
-	if err := svrcmd.Execute(rootCmd, "DEMOCHAIND", app.DefaultNodeHome); err != nil {
-		switch e := err.(type) {
-		case server.ErrorCode:
-			os.Exit(e.Code)
-		default:
-			os.Exit(1)
-		}
-	}
-}
-
-func NewRootCmd() *cobra.Command {
-	encodingConfig := app.MakeEncodingConfig()
 	rootCmd := &cobra.Command{
 		Use:   "demochaid",
-		Short: "Cosmos Demo Chain App",
-		Long:  "Cosmos Demo Chain application with basic transfer and mining functionality",
+		Short: "Cosmos Demo Chain",
+		Long:  "A simple Cosmos SDK blockchain for demonstration purposes",
 	}
 
-	initRootCmd(rootCmd, encodingConfig)
-	return rootCmd
-}
+	// Add version command
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "version",
+		Short: "Print the version",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("demochaid version 0.1.0")
+		},
+	})
 
-func initRootCmd(rootCmd *cobra.Command, encodingConfig app.EncodingConfig) {
-	// 添加子命令
-	rootCmd.AddCommand(
-		InitCmd(app.ModuleBasics, app.DefaultNodeHome),
-		AddGenesisAccountCmd(app.DefaultNodeHome),
-		server.StatusCommand(),
-		Keys(),
-		Version(app.Version),
-	)
+	// Add start command
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "start",
+		Short: "Start the blockchain node",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("Starting Cosmos Demo Chain...")
+			fmt.Println("This is a minimal implementation for demonstration.")
+			fmt.Println("The chain would start here in a full implementation.")
+		},
+	})
 
-	// 添加服务端命令
-	server.AddCommands(
-		rootCmd,
-		app.DefaultNodeHome,
-		NewAppCreator(),
-		NewAppExporter(),
-		func(cmd *cobra.Command) {},
-	)
-}
+	// Add init command
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "init [moniker]",
+		Short: "Initialize the blockchain",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			moniker := args[0]
+			fmt.Printf("Initializing blockchain with moniker: %s\n", moniker)
+			fmt.Println("This would initialize the blockchain in a full implementation.")
+		},
+	})
 
-// 创建应用实例
-func NewAppCreator() server.AppCreator {
-	return func(logger log.Logger, db dbm.DB, traceStore io.Writer, appOpts servertypes.AppOptions) servertypes.Application {
-		var cache sdk.MultiStorePersistentCache
-		if cast.ToBool(appOpts.Get(server.FlagInterBlockCache)) {
-			cache = store.NewCommitKVStoreCacheManager()
-		}
-
-		skipUpgradeHeights := make(map[int64]bool)
-		for _, h := range cast.ToIntSlice(appOpts.Get(server.FlagUnsafeSkipUpgrades)) {
-			skipUpgradeHeights[int64(h)] = true
-		}
-
-		pruningOpts, err := server.GetPruningOptionsFromFlags(appOpts)
-		if err != nil {
-			panic(err)
-		}
-
-		return app.NewCosmosApp(
-			logger,
-			db,
-			traceStore,
-			true,
-			appOpts,
-		)
-	}
-}
-
-// 创建应用导出器
-func NewAppExporter() server.AppExporter {
-	return func(logger log.Logger, db dbm.DB, traceStore io.Writer, height int64, forZeroHeight bool, jailAllowedAddrs []string, appOpts servertypes.AppOptions) (servertypes.ExportedApp, error) {
-		var cosmosApp *app.App
-		if height != -1 {
-			cosmosApp = app.NewCosmosApp(logger, db, traceStore, false, appOpts)
-			if err := cosmosApp.LoadHeight(height); err != nil {
-				return servertypes.ExportedApp{}, err
-			}
-		} else {
-			cosmosApp = app.NewCosmosApp(logger, db, traceStore, true, appOpts)
-		}
-
-		return cosmosApp.ExportAppStateAndValidators(forZeroHeight, jailAllowedAddrs)
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 } 

@@ -1,0 +1,66 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+
+	"cosmos-demo/blockchain"
+)
+
+func main() {
+	fmt.Println("===============================")
+	fmt.Println("===== 自定义区块链节点启动 =====")
+	fmt.Println("===============================")
+
+	// 创建节点
+	nodeID := "node1"
+	validatorName := "validator1"
+	node := blockchain.NewNode(nodeID, true, validatorName)
+	
+	// 创建CLI
+	cli := blockchain.NewCLI(node)
+	
+	// 打印使用方法
+	cli.PrintUsage()
+	
+	// 设置中断处理
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	
+	// 启动读取用户输入的goroutine
+	running := true
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		for running {
+			fmt.Print("> ")
+			cmdLine, err := reader.ReadString('\n')
+			if err != nil {
+				fmt.Println("读取输入失败:", err)
+				continue
+			}
+			
+			// 清理输入
+			cmdLine = strings.TrimSpace(cmdLine)
+			args := strings.Fields(cmdLine)
+			
+			// 处理命令
+			if len(args) > 0 {
+				running = cli.HandleCommand(args)
+			}
+		}
+		// 如果命令处理结束，通知主程序退出
+		c <- os.Interrupt
+	}()
+	
+	// 等待中断信号
+	<-c
+	fmt.Println("\n收到退出信号，正在关闭节点...")
+	
+	// 如果需要，这里可以添加资源清理代码
+	
+	fmt.Println("区块链节点已关闭")
+} 
